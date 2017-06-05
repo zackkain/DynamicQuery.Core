@@ -596,7 +596,7 @@ namespace System.Linq.Dynamic
 				{
 					return this.CreateLiteral((int)num, text);
 				}
-				if (num <= (ulong)-1)
+				if (num <= unchecked((uint)-1))
 				{
 					return this.CreateLiteral((uint)num, text);
 				}
@@ -1211,7 +1211,7 @@ namespace System.Linq.Dynamic
 		}
 		private static bool IsEnumType(Type type)
 		{
-			return ExpressionParser.GetNonNullableType(type).IsEnum;
+			return ExpressionParser.GetNonNullableType(type).GetTypeInfo().IsEnum;
 		}
 		private void CheckAndPromoteOperand(Type signatures, string opName, ref Expression expr, int errorPos)
 		{
@@ -1256,10 +1256,13 @@ namespace System.Linq.Dynamic
 		}
 		private MemberInfo FindPropertyOrField(Type type, string memberName, bool staticAccess)
 		{
-			BindingFlags bindingAttr = BindingFlags.DeclaredOnly | BindingFlags.Public | (staticAccess ? BindingFlags.Static : BindingFlags.Instance);
 			foreach (Type current in ExpressionParser.SelfAndBaseTypes(type))
 			{
-				MemberInfo[] array = current.FindMembers(MemberTypes.Field | MemberTypes.Property, bindingAttr, Type.FilterNameIgnoreCase, memberName);
+				MemberInfo[] array = current.GetTypeInfo()
+					.DeclaredMembers
+					.Where( member => member.Name.Equals(member.Name, StringComparison.CurrentCultureIgnoreCase))
+					.ToArray();
+
 				if (array.Length != 0)
 				{
 					return array[0];
@@ -1269,10 +1272,12 @@ namespace System.Linq.Dynamic
 		}
 		private int FindMethod(Type type, string methodName, bool staticAccess, Expression[] args, out MethodBase method)
 		{
-			BindingFlags bindingAttr = BindingFlags.DeclaredOnly | BindingFlags.Public | (staticAccess ? BindingFlags.Static : BindingFlags.Instance);
 			foreach (Type current in ExpressionParser.SelfAndBaseTypes(type))
 			{
-				MemberInfo[] source = current.FindMembers(MemberTypes.Method, bindingAttr, Type.FilterNameIgnoreCase, methodName);
+				MemberInfo[] source = current.GetTypeInfo()
+					.DeclaredMembers
+					.Where( member => member.Name.Equals(member.Name, StringComparison.CurrentCultureIgnoreCase))
+					.ToArray();
 				int num = this.FindBestMethod(source.Cast<MethodBase>(), args, out method);
 				if (num != 0)
 				{
@@ -1286,7 +1291,7 @@ namespace System.Linq.Dynamic
 		{
 			foreach (Type current in ExpressionParser.SelfAndBaseTypes(type))
 			{
-				MemberInfo[] defaultMembers = current.GetDefaultMembers();
+				MemberInfo[] defaultMembers = current.GetTypeInfo().DeclaredMembers.ToArray();
 				if (defaultMembers.Length != 0)
 				{
 					IEnumerable<MethodBase> methods = 
@@ -1558,7 +1563,7 @@ namespace System.Linq.Dynamic
 		{
 			if (type.GetTypeInfo().IsEnum)
 			{
-				MemberInfo[] array = type.FindMembers(MemberTypes.Field, BindingFlags.DeclaredOnly | BindingFlags.Static | BindingFlags.Public, Type.FilterNameIgnoreCase, name);
+				var array = type.GetRuntimeFields().Where( field => field.Name.Equals(name, StringComparison.CurrentCultureIgnoreCase)).ToArray();
 				if (array.Length != 0)
 				{
 					return ((FieldInfo)array[0]).GetValue(null);
