@@ -7,9 +7,10 @@ namespace System.Linq.Dynamic
 	{
 		public override string ToString()
 		{
-			PropertyInfo[] properties = base.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public);
-			StringBuilder stringBuilder = new StringBuilder();
+			var properties = base.GetType().GetRuntimeProperties().ToArray();
+			var stringBuilder = new StringBuilder();
 			stringBuilder.Append("{");
+
 			for (int i = 0; i < properties.Length; i++)
 			{
 				if (i > 0)

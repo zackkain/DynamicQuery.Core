@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
+
 namespace System.Linq.Dynamic
 {
 	public static class DynamicQueryable
@@ -20,7 +22,7 @@ namespace System.Linq.Dynamic
 				throw new ArgumentNullException("predicate");
 			}
 			LambdaExpression expression = DynamicExpression.ParseLambda(source.ElementType, typeof(bool), predicate, values);
-			return source.Provider.CreateQuery(Expression.Call(typeof(Queryable), "Where", new Type[]
+			return source.Provider.CreateQuery(Expression.Call(typeof(System.Linq.Queryable), "Where", new Type[]
 			{
 				source.ElementType
 			}, new Expression[]

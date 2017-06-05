@@ -351,7 +351,7 @@ namespace System.Linq.Dynamic
 				this.NextToken();
 				Expression expression2 = this.ParseAdditive();
 				bool flag = token.id == ExpressionParser.TokenId.Equal || token.id == ExpressionParser.TokenId.DoubleEqual || token.id == ExpressionParser.TokenId.ExclamationEqual || token.id == ExpressionParser.TokenId.LessGreater;
-				if (flag && !expression.Type.IsValueType && !expression2.Type.IsValueType)
+				if (flag && !expression.Type. && !expression2.Type.IsValueType)
 				{
 					if (expression.Type != expression2.Type)
 					{
@@ -1156,7 +1156,8 @@ namespace System.Linq.Dynamic
 			{
 				return type;
 			}
-			return type.GetGenericArguments()[0];
+			//return type.GetGenericArguments()[0];
+            return type.GenericTypeArguments[0];
 		}
 		private static string GetTypeName(Type type)
 		{
@@ -1805,7 +1806,7 @@ namespace System.Linq.Dynamic
 		}
 		private Expression GenerateStringConcat(Expression left, Expression right)
 		{
-			return Expression.Call(null, typeof(string).GetMethod("Concat", new Type[]
+			return Expression.Call(null, typeof(string).GetRuntimeMethod("Concat", new Type[]
 			{
 				typeof(object),
 				typeof(object)
@@ -1817,7 +1818,7 @@ namespace System.Linq.Dynamic
 		}
 		private MethodInfo GetStaticMethod(string methodName, Expression left, Expression right)
 		{
-			return left.Type.GetMethod(methodName, new Type[]
+			return left.Type.GetRuntimeMethod(methodName, new Type[]
 			{
 				left.Type,
 				right.Type

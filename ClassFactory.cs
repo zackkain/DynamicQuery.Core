@@ -11,7 +11,7 @@ namespace System.Linq.Dynamic
 		private ModuleBuilder module;
 		private Dictionary<Signature, Type> classes;
 		private int classCount;
-		private ReaderWriterLock rwLock;
+		private System.Threading.ReaderWriterLockSlim rwLock;
 		static ClassFactory()
 		{
 			ClassFactory.Instance = new ClassFactory();
@@ -19,14 +19,15 @@ namespace System.Linq.Dynamic
 		private ClassFactory()
 		{
 			AssemblyName name = new AssemblyName("DynamicClasses");
-			AssemblyBuilder assemblyBuilder = AppDomain.CurrentDomain.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run);
+			AssemblyBuilder assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName(Guid.NewGuid().ToString()),AssemblyBuilderAccess.Run);            
 			this.module = assemblyBuilder.DefineDynamicModule("Module");
 			this.classes = new Dictionary<Signature, Type>();
-			this.rwLock = new ReaderWriterLock();
+			this.rwLock = new ReaderWriterLockSlim();
 		}
 		public Type GetDynamicClass(IEnumerable<DynamicProperty> properties)
 		{
-			this.rwLock.AcquireReaderLock(-1);
+			//this.rwLock.AcquireReaderLock(-1);
+            this.rwLock.EnterUpgradeableReadLock();
 			Type result;
 			try
 			{
@@ -41,13 +42,14 @@ namespace System.Linq.Dynamic
 			}
 			finally
 			{
-				this.rwLock.ReleaseReaderLock();
+                //this.rwLock.ReleaseReaderLock();
+                this.rwLock.ExitUpgradeableReadLock();
 			}
 			return result;
 		}
 		private Type CreateDynamicClass(DynamicProperty[] properties)
 		{
-			LockCookie lockCookie = this.rwLock.UpgradeToWriterLock(-1);
+			this.rwLock.EnterWriteLock();
 			Type result;
 			try
 			{
@@ -56,13 +58,13 @@ namespace System.Linq.Dynamic
 				FieldInfo[] fields = this.GenerateProperties(typeBuilder, properties);
 				this.GenerateEquals(typeBuilder, fields);
 				this.GenerateGetHashCode(typeBuilder, fields);
-				Type type = typeBuilder.CreateType();
+				Type type = typeBuilder.AsType();
 				this.classCount++;
 				result = type;
 			}
 			finally
 			{
-				this.rwLock.DowngradeFromWriterLock(ref lockCookie);
+				this.rwLock.ExitWriteLock();
 			}
 			return result;
 		}
@@ -100,11 +102,12 @@ namespace System.Linq.Dynamic
 			{
 				typeof(object)
 			});
+            Type type = tb.AsType();
 			ILGenerator iLGenerator = methodBuilder.GetILGenerator();
-			LocalBuilder local = iLGenerator.DeclareLocal(tb);
+			LocalBuilder local = iLGenerator.DeclareLocal(type);
 			Label label = iLGenerator.DefineLabel();
 			iLGenerator.Emit(OpCodes.Ldarg_1);
-			iLGenerator.Emit(OpCodes.Isinst, tb);
+			iLGenerator.Emit(OpCodes.Isinst, type);
 			iLGenerator.Emit(OpCodes.Stloc, local);
 			iLGenerator.Emit(OpCodes.Ldloc, local);
 			iLGenerator.Emit(OpCodes.Brtrue_S, label);
@@ -115,17 +118,17 @@ namespace System.Linq.Dynamic
 			{
 				FieldInfo fieldInfo = fields[i];
 				Type fieldType = fieldInfo.FieldType;
-				Type type = typeof(EqualityComparer<>).MakeGenericType(new Type[]
+				Type genericType = typeof(EqualityComparer<>).MakeGenericType(new Type[]
 				{
 					fieldType
 				});
 				label = iLGenerator.DefineLabel();
-				iLGenerator.EmitCall(OpCodes.Call, type.GetMethod("get_Default"), null);
+				iLGenerator.EmitCall(OpCodes.Call, genericType.GetRuntimeProperty("Default").GetMethod, null);
 				iLGenerator.Emit(OpCodes.Ldarg_0);
 				iLGenerator.Emit(OpCodes.Ldfld, fieldInfo);
 				iLGenerator.Emit(OpCodes.Ldloc, local);
 				iLGenerator.Emit(OpCodes.Ldfld, fieldInfo);
-				iLGenerator.EmitCall(OpCodes.Callvirt, type.GetMethod("Equals", new Type[]
+				iLGenerator.EmitCall(OpCodes.Callvirt, genericType.GetRuntimeMethod("Equals", new Type[]
 				{
 					fieldType,
 					fieldType
@@ -151,10 +154,10 @@ namespace System.Linq.Dynamic
 				{
 					fieldType
 				});
-				iLGenerator.EmitCall(OpCodes.Call, type.GetMethod("get_Default"), null);
+				iLGenerator.EmitCall(OpCodes.Call, type.GetRuntimeProperty("Default").GetMethod, null);
 				iLGenerator.Emit(OpCodes.Ldarg_0);
 				iLGenerator.Emit(OpCodes.Ldfld, fieldInfo);
-				iLGenerator.EmitCall(OpCodes.Callvirt, type.GetMethod("GetHashCode", new Type[]
+				iLGenerator.EmitCall(OpCodes.Callvirt, type.GetRuntimeMethod("GetHashCode", new Type[]
 				{
 					fieldType
 				}), null);

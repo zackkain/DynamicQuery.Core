@@ -1,0 +1,2 @@
+D:\DynamicQuery.core\bin\Debug\netstandard1.4\DynamicQuery.core.deps.json
+D:\DynamicQuery.core\obj\Debug\netstandard1.4\DynamicQuery.core.AssemblyInfo.cs
