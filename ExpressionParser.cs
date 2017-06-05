@@ -351,17 +351,17 @@ namespace System.Linq.Dynamic
 				this.NextToken();
 				Expression expression2 = this.ParseAdditive();
 				bool flag = token.id == ExpressionParser.TokenId.Equal || token.id == ExpressionParser.TokenId.DoubleEqual || token.id == ExpressionParser.TokenId.ExclamationEqual || token.id == ExpressionParser.TokenId.LessGreater;
-				if (flag && !expression.Type. && !expression2.Type.IsValueType)
+				if (flag && !expression.Type.GetTypeInfo().IsValueType && !expression2.Type.GetTypeInfo().IsValueType)
 				{
 					if (expression.Type != expression2.Type)
 					{
-						if (expression.Type.IsAssignableFrom(expression2.Type))
+						if (expression.Type.GetTypeInfo().IsAssignableFrom(expression2.Type.GetTypeInfo()))
 						{
 							expression2 = Expression.Convert(expression2, expression.Type);
 						}
 						else
 						{
-							if (!expression2.Type.IsAssignableFrom(expression.Type))
+							if (!expression2.Type.GetTypeInfo().IsAssignableFrom(expression.Type.GetTypeInfo()))
 							{
 								throw this.IncompatibleOperandsError(token.text, expression, expression2, token.pos);
 							}
@@ -826,7 +826,7 @@ namespace System.Linq.Dynamic
 			MemberBinding[] array = new MemberBinding[list.Count];
 			for (int i = 0; i < array.Length; i++)
 			{
-				array[i] = Expression.Bind(type.GetProperty(list[i].Name), list2[i]);
+				array[i] = Expression.Bind(type.GetRuntimeProperty(list[i].Name), list2[i]);
 			}
 			return Expression.MemberInit(Expression.New(type), array);
 		}
@@ -848,7 +848,7 @@ namespace System.Linq.Dynamic
 			this.NextToken();
 			if (this.token.id == ExpressionParser.TokenId.Question)
 			{
-				if (!type.IsValueType || ExpressionParser.IsNullableType(type))
+				if (!type.GetTypeInfo().IsValueType || ExpressionParser.IsNullableType(type))
 				{
 					throw this.ParseError(pos, "Type '{0}' has no nullable form", new object[]
 					{
@@ -869,7 +869,7 @@ namespace System.Linq.Dynamic
 			}
 			Expression[] array = this.ParseArgumentList();
 			MethodBase methodBase;
-			switch (this.FindBestMethod(type.GetConstructors(), array, out methodBase))
+			switch (this.FindBestMethod(type.GetTypeInfo().DeclaredConstructors, array, out methodBase))
 			{
 			case 0:
 				if (array.Length == 1)
@@ -896,7 +896,7 @@ namespace System.Linq.Dynamic
 			{
 				return expr;
 			}
-			if (type2.IsValueType && type.IsValueType)
+			if (type2.GetTypeInfo().IsValueType && type.GetTypeInfo().IsValueType)
 			{
 				if ((ExpressionParser.IsNullableType(type2) || ExpressionParser.IsNullableType(type)) && ExpressionParser.GetNonNullableType(type2) == ExpressionParser.GetNonNullableType(type))
 				{
@@ -907,7 +907,7 @@ namespace System.Linq.Dynamic
 					return Expression.ConvertChecked(expr, type);
 				}
 			}
-			if (type2.IsAssignableFrom(type) || type.IsAssignableFrom(type2) || type2.IsInterface || type.IsInterface)
+			if (type2.GetTypeInfo().IsAssignableFrom(type.GetTypeInfo()) || type.GetTypeInfo().IsAssignableFrom(type2.GetTypeInfo()) || type2.GetTypeInfo().IsInterface || type.GetTypeInfo().IsInterface)
 			{
 				return Expression.Convert(expr, type);
 			}
@@ -933,7 +933,7 @@ namespace System.Linq.Dynamic
 					Type type2 = ExpressionParser.FindGenericType(typeof(IEnumerable<>), type);
 					if (type2 != null)
 					{
-						Type elementType = type2.GetGenericArguments()[0];
+						Type elementType = type2.GenericTypeArguments[0];
 						return this.ParseAggregate(instance, elementType, identifier, pos);
 					}
 				}
@@ -997,13 +997,13 @@ namespace System.Linq.Dynamic
 		{
 			while (type != null && type != typeof(object))
 			{
-				if (type.IsGenericType && type.GetGenericTypeDefinition() == generic)
+				if (type.GetTypeInfo().IsGenericType && type.GetGenericTypeDefinition() == generic)
 				{
 					return type;
 				}
-				if (generic.IsInterface)
+				if (generic.GetTypeInfo().IsInterface)
 				{
-					Type[] interfaces = type.GetInterfaces();
+					Type[] interfaces = type.GetTypeInfo().ImplementedInterfaces.ToArray();
 					for (int i = 0; i < interfaces.Length; i++)
 					{
 						Type type2 = interfaces[i];
@@ -1014,7 +1014,7 @@ namespace System.Linq.Dynamic
 						}
 					}
 				}
-				type = type.BaseType;
+				type = type.GetTypeInfo().BaseType;
 			}
 			return null;
 		}
@@ -1148,7 +1148,7 @@ namespace System.Linq.Dynamic
 		}
 		private static bool IsNullableType(Type type)
 		{
-			return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>);
+			return type.GetTypeInfo().IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>);
 		}
 		private static Type GetNonNullableType(Type type)
 		{
@@ -1184,11 +1184,11 @@ namespace System.Linq.Dynamic
 		private static int GetNumericTypeKind(Type type)
 		{
 			type = ExpressionParser.GetNonNullableType(type);
-			if (type.IsEnum)
+			if (type.GetTypeInfo().IsEnum)
 			{
 				return 0;
 			}
-			switch (Type.GetTypeCode(type))
+			switch (System.Type.GetTypeCode(type))
 			{
 			case TypeCode.Char:
 			case TypeCode.Single:
@@ -1291,7 +1291,7 @@ namespace System.Linq.Dynamic
 				{
 					IEnumerable<MethodBase> methods = 
 						from p in defaultMembers.OfType<PropertyInfo>()
-						select p.GetGetMethod() into m
+						select p.GetMethod into m
 						where m != null
 						select m;
 					int num = this.FindBestMethod(methods, args, out method);
@@ -1306,7 +1306,7 @@ namespace System.Linq.Dynamic
 		}
 		private static IEnumerable<Type> SelfAndBaseTypes(Type type)
 		{
-			if (type.IsInterface)
+			if (type.GetTypeInfo().IsInterface)
 			{
 				List<Type> list = new List<Type>();
 				ExpressionParser.AddInterface(list, type);
@@ -1319,7 +1319,7 @@ namespace System.Linq.Dynamic
 			while (type != null)
 			{
 				yield return type;
-				type = type.BaseType;
+				type = type.GetTypeInfo().BaseType;
 			}
 			yield break;
 		}
@@ -1328,7 +1328,7 @@ namespace System.Linq.Dynamic
 			if (!types.Contains(type))
 			{
 				types.Add(type);
-				Type[] interfaces = type.GetInterfaces();
+				Type[] interfaces = type.GetTypeInfo().ImplementedInterfaces.ToArray();
 				for (int i = 0; i < interfaces.Length; i++)
 				{
 					Type type2 = interfaces[i];
@@ -1405,7 +1405,7 @@ namespace System.Linq.Dynamic
 				string name;
 				if (constantExpression == ExpressionParser.nullLiteral)
 				{
-					if (!type.IsValueType || ExpressionParser.IsNullableType(type))
+					if (!type.GetTypeInfo().IsValueType || ExpressionParser.IsNullableType(type))
 					{
 						return Expression.Constant(null, type);
 					}
@@ -1442,7 +1442,7 @@ namespace System.Linq.Dynamic
 			{
 				return null;
 			}
-			if (type.IsValueType || exact)
+			if (type.GetTypeInfo().IsValueType || exact)
 			{
 				return Expression.Convert(expr, type);
 			}
@@ -1556,7 +1556,7 @@ namespace System.Linq.Dynamic
 		}
 		private static object ParseEnum(string name, Type type)
 		{
-			if (type.IsEnum)
+			if (type.GetTypeInfo().IsEnum)
 			{
 				MemberInfo[] array = type.FindMembers(MemberTypes.Field, BindingFlags.DeclaredOnly | BindingFlags.Static | BindingFlags.Public, Type.FilterNameIgnoreCase, name);
 				if (array.Length != 0)
@@ -1572,9 +1572,9 @@ namespace System.Linq.Dynamic
 			{
 				return true;
 			}
-			if (!target.IsValueType)
+			if (!target.GetTypeInfo().IsValueType)
 			{
-				return target.IsAssignableFrom(source);
+				return target.GetTypeInfo().IsAssignableFrom(source.GetTypeInfo());
 			}
 			Type nonNullableType = ExpressionParser.GetNonNullableType(source);
 			Type nonNullableType2 = ExpressionParser.GetNonNullableType(target);
@@ -1582,8 +1582,8 @@ namespace System.Linq.Dynamic
 			{
 				return false;
 			}
-			TypeCode typeCode = nonNullableType.IsEnum ? TypeCode.Object : Type.GetTypeCode(nonNullableType);
-			TypeCode typeCode2 = nonNullableType2.IsEnum ? TypeCode.Object : Type.GetTypeCode(nonNullableType2);
+			TypeCode typeCode = nonNullableType.GetTypeInfo().IsEnum ? TypeCode.Object : Type.GetTypeCode(nonNullableType);
+			TypeCode typeCode2 = nonNullableType2.GetTypeInfo().IsEnum ? TypeCode.Object : Type.GetTypeCode(nonNullableType2);
 			switch (typeCode)
 			{
 			case TypeCode.SByte:
